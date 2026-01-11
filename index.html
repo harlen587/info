@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台股全方位資訊</title>
+    <title>台股全方位觀測儀表板 (完整版)</title>
     <style>
         :root {
             --bg-dark: #1a1a1b;
@@ -357,21 +357,41 @@
         </div>
     </div>
 
-    <!-- 8. 營收 -->
+    <!-- 8. 營收 (新版) -->
     <div id="view-revenue" class="view-section">
-        <div class="dashboard-panel" style="max-width:600px; margin:auto; text-align:center">
-            <h2>💰 台股營收查詢</h2>
+        <div class="dashboard-panel" style="max-width:700px; margin:auto; text-align:center">
+            <h2>💰 台股最新營收監測</h2>
             <div class="controls" style="justify-content:center">
-                <input type="text" id="rev-input" placeholder="輸入代號 (如 2330)" style="text-align:center">
-                <button onclick="Modules.Revenue.query()">🔍 查詢</button>
+                <input type="text" id="rev-input" placeholder="輸入代號 (如 2330)" style="text-align:center" onkeydown="if(event.keyCode==13) Modules.Revenue.query()">
+                <button id="rev-btn" onclick="Modules.Revenue.query()">🔍 查詢最新數據</button>
             </div>
-            <div id="rev-result" style="display:none; text-align:left; margin-top:20px;">
-                <h3 id="rev-title" style="color:white; text-align:center"></h3>
-                <div class="stats-grid" style="grid-template-columns:1fr 1fr">
-                    <div class="stat-card"><div class="stat-label">本月營收</div><div id="rev-m" class="stat-val"></div><div id="rev-my" style="font-size:14px"></div></div>
-                    <div class="stat-card"><div class="stat-label">累計營收</div><div id="rev-c" class="stat-val"></div><div id="rev-cy" style="font-size:14px"></div></div>
+            <div id="rev-status" class="status-msg">請輸入代號後查詢</div>
+            
+            <div id="rev-result" style="display:none; text-align:left; margin-top:20px; border-top:1px solid #444; padding-top:20px;">
+                <div style="text-align:center">
+                    <h3 id="rev-title" style="color:white; margin:0 0 5px 0"></h3>
+                    <span id="rev-period" style="color:var(--primary); font-weight:bold; font-size:16px;"></span>
                 </div>
-                <div style="background:#444; padding:10px; border-radius:8px; font-size:13px; color:#ccc">📝 <span id="rev-note"></span></div>
+                
+                <div class="stats-grid" style="grid-template-columns:1fr 1fr; margin-top:20px;">
+                    <div class="stat-card">
+                        <div class="stat-label">本月營業收入</div>
+                        <div id="rev-m" class="stat-val"></div>
+                        <div id="rev-my" style="font-weight:bold; margin-top:5px"></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">本年累計營收</div>
+                        <div id="rev-c" class="stat-val"></div>
+                        <div id="rev-cy" style="font-weight:bold; margin-top:5px"></div>
+                    </div>
+                </div>
+                
+                <div style="background:#332b00; padding:15px; border-radius:5px; border-left:5px solid #fcc419; margin-top:20px;">
+                    <strong style="color:#fcc419">📊 營收變化原因說明：</strong><br>
+                    <span id="rev-note" style="color:#e0e0e0; font-size:14px; line-height:1.5"></span>
+                </div>
+                
+                <p id="rev-update" style="font-size:11px; color:#777; text-align:right; margin-top:15px"></p>
             </div>
         </div>
     </div>
@@ -550,7 +570,7 @@
                     const json = await res.json();
                     if(json.stat!=="OK") throw new Error();
                     tbody.innerHTML="";
-                    const map={d:0, c:1, n:2, cnt:3, r:4}; // 預設 Mapping
+                    const map={d:0, c:1, n:2, cnt:3, r:4}; 
                     if(json.fields) {
                         map.d = json.fields.findIndex(f=>f.includes("日期"));
                         map.c = json.fields.findIndex(f=>f.includes("代號"));
@@ -588,7 +608,7 @@
             },
             changePage: function(d) { if(this.page+d>0 && this.page+d<=Math.ceil(this.data.length/this.size)) { this.page+=d; this.render(); } },
             sort: function(key) { 
-                this.data.sort((a,b)=>(a[key]||"").localeCompare(b[key]||"") * -1); // Default Desc
+                this.data.sort((a,b)=>(a[key]||"").localeCompare(b[key]||"") * -1); 
                 this.page=1; this.render();
             }
         },
@@ -698,25 +718,89 @@
                 } catch(e){}
             }
         },
-        // 8. 營收
+        // 8. 營收 (全功能移植版)
         Revenue: {
             query: async function() {
-                const id = document.getElementById('rev-input').value; if(!id) return;
+                const id = document.getElementById('rev-input').value.trim();
+                const btn = document.getElementById('rev-btn');
+                const status = document.getElementById('rev-status');
+                
+                if(!id) { alert('請輸入公司代號'); return; }
+                
+                const originalText = btn.innerText;
+                btn.innerText = "🚀 連線中..."; btn.disabled = true;
+                status.innerText = "⏳ 正在查詢公開資訊觀測站...";
+                
+                // 加入時間戳記避免快取
+                const apiUrl = `https://mops.twse.com.tw/mops/api/t05st10_ifrs?t=${new Date().getTime()}`;
+
                 try {
-                    const res = await fetch(Utils.cors(`https://mops.twse.com.tw/mops/api/t05st10_ifrs?t=${Date.now()}`), {
-                        method:'POST', body:JSON.stringify({companyId:id, dataType:'1'})
+                    const res = await fetch(Utils.cors(apiUrl), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            companyId: id, 
+                            dataType: "1", 
+                            year: "", 
+                            month: "", 
+                            subsidiaryCompanyId: "" 
+                        })
                     });
+                    
                     const json = await res.json();
-                    if(json.code!==200 || !json.result.data) throw new Error();
-                    const d = json.result.data;
-                    document.getElementById('rev-result').style.display='block';
-                    document.getElementById('rev-title').innerText = `${json.result.companyAbbreviation} (${id}) - ${json.result.yymm}`;
-                    document.getElementById('rev-m').innerText = `${d[0][1]}千`;
-                    document.getElementById('rev-my').innerText = `YoY ${d[3][1]}%`;
-                    document.getElementById('rev-c').innerText = `${d[4][1]}千`;
-                    document.getElementById('rev-cy').innerText = `YoY ${d[7][1]}%`;
-                    document.getElementById('rev-note').innerText = (d[8]&&d[8][1]) ? d[8][1] : '無說明';
-                } catch(e){ alert('查無資料'); }
+                    
+                    if(json.code === 200 && json.result && json.result.data) {
+                        const d = json.result.data;
+                        const info = json.result;
+                        
+                        document.getElementById('rev-result').style.display = 'block';
+                        document.getElementById('rev-title').innerText = `${info.companyAbbreviation} (${id})`;
+                        
+                        // 處理日期格式 (ex: 11301)
+                        const yymm = info.yymm || "";
+                        const y = yymm.substring(0,3);
+                        const m = yymm.substring(3);
+                        document.getElementById('rev-period').innerText = `資料期別：民國 ${y} 年 ${m} 月`;
+                        
+                        // 輔助函式：處理數值與顏色
+                        const setVal = (eid, val, isPct) => {
+                            const el = document.getElementById(eid);
+                            const num = parseFloat(val.replace(/,/g,''));
+                            
+                            if(isNaN(num)) {
+                                el.innerText = "--"; el.className = "";
+                            } else {
+                                if(isPct) {
+                                    el.innerText = `YoY ${val}% ${num>=0?'▲':'▼'}`;
+                                    el.className = num>=0 ? 'val-up' : 'val-down';
+                                    el.style.color = num>=0 ? 'var(--danger)' : 'var(--success)';
+                                } else {
+                                    el.innerText = `$ ${val} 仟元`;
+                                    el.className = 'stat-val';
+                                }
+                            }
+                        };
+
+                        setVal('rev-m', d[0][1], false);
+                        setVal('rev-my', d[3][1], true);
+                        setVal('rev-c', d[4][1], false);
+                        setVal('rev-cy', d[7][1], true);
+                        
+                        document.getElementById('rev-note').innerText = (d[8] && d[8][1]) ? d[8][1] : "該公司無特定營收原因說明。";
+                        document.getElementById('rev-update').innerText = `API 查詢時間：${json.datetime}`;
+                        status.innerText = "✅ 查詢成功";
+                    } else {
+                        document.getElementById('rev-result').style.display = 'none';
+                        status.innerText = "⚠️ 查無資料，請確認代號是否正確";
+                    }
+                } catch(e) { 
+                    console.error(e);
+                    status.innerText = "❌ 連線失敗，請稍後再試"; 
+                    document.getElementById('rev-result').style.display = 'none';
+                } finally {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
             }
         },
         // 9. 本益比

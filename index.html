@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>台股全方位觀測儀表板 (完整版)</title>
+    <title>台股資訊觀測</title>
     <style>
         :root {
             --bg-dark: #1a1a1b;
@@ -189,7 +189,11 @@
 
         /* 排名 */
         .rank-badge { font-weight: 900; font-style: italic; color: #666; width: 30px; display: inline-block; text-align: center; }
-        .top-3 { color: var(--accent); font-size: 1.2em; }
+        .top-3 { color: var(--accent); font-size: 1.2em; text-shadow: 0 0 5px rgba(245, 158, 11, 0.3); }
+        
+        /* IPO 標籤 */
+        .status-tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #444; color: #ccc; display: inline-block; margin-top: 4px; }
+        .listed { background: #065f46; color: #a7f3d0; }
     </style>
 </head>
 <body>
@@ -273,7 +277,7 @@
         </div>
     </div>
 
-    <!-- 3. Top 20 -->
+    <!-- 3. Top 20 (修正版) -->
     <div id="view-top20" class="view-section">
         <div class="dashboard-panel">
             <h2>🔥 今日成交量 TOP 20</h2>
@@ -284,7 +288,17 @@
             <div id="top20-status" class="status-msg"></div>
             <div class="table-wrapper">
                 <table>
-                    <thead><tr><th class="th-red">排名</th><th class="th-red">代號</th><th class="th-red">名稱</th><th class="th-red">成交量(張)</th><th class="th-red">收盤價</th><th class="th-red">漲跌</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th class="th-red sort-icon" onclick="Modules.Top20.sort('Rank')">排名</th>
+                            <th class="th-red">代號</th>
+                            <th class="th-red">名稱</th>
+                            <th class="th-red sort-icon" onclick="Modules.Top20.sort('TradeVolume')">成交量(張)</th>
+                            <th class="th-red sort-icon" onclick="Modules.Top20.sort('ClosingPrice')">收盤價</th>
+                            <th class="th-red sort-icon" onclick="Modules.Top20.sort('Change')">漲跌</th>
+                            <th class="th-red">成交筆數</th>
+                        </tr>
+                    </thead>
                     <tbody id="top20-body"></tbody>
                 </table>
             </div>
@@ -309,22 +323,33 @@
         </div>
     </div>
 
-    <!-- 5. 新股上市 -->
+    <!-- 5. 新股上市 (修正版) -->
     <div id="view-ipo" class="view-section">
         <div class="dashboard-panel">
             <h2>🚀 新股上市申請進度</h2>
-            <div class="controls"><button onclick="Modules.IPO.init(true)">🔄 刷新</button></div>
+            <div class="controls">
+                <div class="pagination">
+                    <button onclick="Modules.IPO.changePage(-1)">◀</button>
+                    <span id="ipo-page" class="page-info">1</span>
+                    <button onclick="Modules.IPO.changePage(1)">▶</button>
+                </div>
+                <button onclick="Modules.IPO.init(true)">🔄 刷新</button>
+            </div>
             <div id="ipo-status" class="status-msg"></div>
             <div class="table-wrapper">
                 <table>
-                    <thead><tr>
-                        <th class="th-green sort-icon" onclick="Modules.IPO.sort('Code')">代號</th>
-                        <th class="th-green">公司名稱</th>
-                        <th class="th-green sort-icon" onclick="Modules.IPO.sort('ApplicationDate')">申請日期</th>
-                        <th class="th-green">資本額(億)</th>
-                        <th class="th-green">承銷價</th>
-                        <th class="th-green sort-icon" onclick="Modules.IPO.sort('ListingDate')">掛牌日期</th>
-                    </tr></thead>
+                    <thead>
+                        <tr>
+                            <th class="th-green sort-icon" onclick="Modules.IPO.sort('Code')">代號</th>
+                            <th class="th-green sort-icon" onclick="Modules.IPO.sort('Company')">公司名稱</th>
+                            <th class="th-green sort-icon" onclick="Modules.IPO.sort('ApplicationDate')">申請日期</th>
+                            <th class="th-green sort-icon" onclick="Modules.IPO.sort('Chairman')">董事長</th>
+                            <th class="th-green sort-icon" onclick="Modules.IPO.sort('_capitalNum')">實收資本額</th>
+                            <th class="th-green sort-icon" onclick="Modules.IPO.sort('_priceNum')">承銷價</th>
+                            <th class="th-green sort-icon" onclick="Modules.IPO.sort('ListingDate')">掛牌日期</th>
+                            <th class="th-green">主辦承銷商</th>
+                        </tr>
+                    </thead>
                     <tbody id="ipo-body"></tbody>
                 </table>
             </div>
@@ -612,23 +637,70 @@
                 this.page=1; this.render();
             }
         },
-        // 3. Top 20
+        // 3. Top 20 (修正版)
         Top20: {
-            loaded: false,
+            loaded: false, data: [], currentSort: { key: 'Rank', dir: 'asc' },
             init: async function(force) {
                 if(this.loaded && !force) return;
+                const tbody = document.getElementById('top20-body');
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center">⏳ 載入中...</td></tr>';
                 try {
                     const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20"));
-                    const data = await res.json();
-                    const tbody = document.getElementById('top20-body'); tbody.innerHTML="";
-                    data.forEach((i, idx)=>{
-                        const vol = Math.floor(parseInt(i.TradeVolume.replace(/,/g,''))/1000);
-                        const cls = i.Dir.includes('+')||i.Dir.includes('▲') ? 'val-up' : (i.Dir.includes('-')||i.Dir.includes('▼') ? 'val-down' : '');
-                        tbody.innerHTML+=`<tr><td><span class="rank-badge ${idx<3?'top-3':''}">${i.Rank||idx+1}</span></td><td class="stock-code">${i.Code}</td><td>${i.Name}</td><td style="color:var(--accent)">${vol.toLocaleString()}</td><td>${i.ClosingPrice}</td><td class="${cls}">${i.Dir}${i.Change}</td></tr>`;
-                    });
-                    document.getElementById('top20-date').innerText = `資料日期: ${data[0].Date}`;
+                    const rawData = await res.json();
+                    
+                    // 預處理資料 (轉數值)
+                    this.data = rawData.map((item, index) => ({
+                        ...item,
+                        Rank: parseInt(item.Rank) || (index + 1),
+                        TradeVolume: parseInt(item.TradeVolume.replace(/,/g, '')),
+                        ClosingPrice: parseFloat(item.ClosingPrice.replace(/,/g, '')),
+                        Change: parseFloat(item.Change) * (item.Dir.includes('▼') || item.Dir.includes('-') ? -1 : 1),
+                        Transaction: parseInt(item.Transaction.replace(/,/g, ''))
+                    }));
+
+                    document.getElementById('top20-date').innerText = `資料日期: ${rawData[0].Date}`;
                     this.loaded=true;
-                } catch(e){}
+                    this.sort('Rank', 'asc'); // 預設依排名排序
+                } catch(e){ 
+                    console.error(e);
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--danger)">❌ 載入失敗</td></tr>';
+                }
+            },
+            sort: function(key, forceDir = null) {
+                if (forceDir) {
+                    this.currentSort.dir = forceDir;
+                } else {
+                    // 切換排序 (排名預設升序，其餘降序)
+                    if (this.currentSort.key === key) {
+                        this.currentSort.dir = this.currentSort.dir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.currentSort.dir = key === 'Rank' ? 'asc' : 'desc';
+                    }
+                }
+                this.currentSort.key = key;
+                
+                this.data.sort((a, b) => {
+                    return this.currentSort.dir === 'asc' ? a[key] - b[key] : b[key] - a[key];
+                });
+                this.render();
+            },
+            render: function() {
+                const tbody = document.getElementById('top20-body'); tbody.innerHTML="";
+                this.data.forEach((i, idx)=>{
+                    const volDisplay = Math.floor(i.TradeVolume / 1000).toLocaleString(); // 換算成張
+                    const diffClass = i.Change > 0 ? 'val-up' : (i.Change < 0 ? 'val-down' : '');
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><span class="rank-badge ${i.Rank<=3?'top-3':''}">${i.Rank}</span></td>
+                            <td class="stock-code">${i.Code}</td>
+                            <td style="font-weight:bold">${i.Name}</td>
+                            <td style="color:var(--accent)">${volDisplay}</td>
+                            <td style="font-weight:bold">${i.ClosingPrice.toFixed(2)}</td>
+                            <td class="${diffClass}">${i.Dir}${Math.abs(i.Change).toFixed(2)}</td>
+                            <td style="color:#aaa">${i.Transaction.toLocaleString()}</td>
+                        </tr>`;
+                });
             }
         },
         // 4. 重大訊息
@@ -654,26 +726,88 @@
             },
             changePage: function(d) { if(this.page+d>0) { this.page+=d; this.render(); } }
         },
-        // 5. 新股上市
+        // 5. 新股上市 (修正版)
         IPO: {
-            loaded: false, data: [],
+            loaded: false, data: [], page: 1, size: 20, currentSort: { key: 'ApplicationDate', dir: 'desc' },
             init: async function(force) {
                 if(this.loaded && !force) return;
+                const tbody = document.getElementById('ipo-body');
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center">⏳ 載入中...</td></tr>';
                 try {
                     const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/company/newlisting"));
-                    this.data = await res.json();
-                    this.loaded=true; this.sort('ApplicationDate');
-                } catch(e){}
+                    const rawData = await res.json();
+                    
+                    // 預處理
+                    this.data = rawData.map(item => {
+                        const capStr = item["AmountofCapital "] || item["AmountofCapital"] || "0";
+                        const priceStr = item["UnderwritingPrice"] || "0";
+                        return {
+                            ...item,
+                            _capitalNum: parseInt(capStr.replace(/,/g, '')) || 0,
+                            _priceNum: parseFloat(priceStr.replace(/,/g, '')) || 0,
+                            _isListed: (item.ListingDate || "").trim() !== ""
+                        };
+                    });
+
+                    this.loaded=true; 
+                    this.sort('ApplicationDate', 'desc');
+                } catch(e){
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--danger)">❌ 載入失敗</td></tr>';
+                }
+            },
+            sort: function(key, forceDir = null) {
+                if (forceDir) {
+                    this.currentSort.dir = forceDir;
+                } else {
+                    this.currentSort.dir = (this.currentSort.key === key && this.currentSort.dir === 'asc') ? 'desc' : 'asc';
+                }
+                this.currentSort.key = key;
+
+                this.data.sort((a, b) => {
+                    let vA = a[key] || '';
+                    let vB = b[key] || '';
+                    if (this.currentSort.dir === 'asc') return vA > vB ? 1 : -1;
+                    return vA < vB ? 1 : -1;
+                });
+                
+                this.page = 1;
+                this.render();
+            },
+            changePage: function(d) {
+                const max = Math.ceil(this.data.length / this.size);
+                if (this.page + d > 0 && this.page + d <= max) {
+                    this.page += d;
+                    this.render();
+                }
             },
             render: function() {
                 const tbody = document.getElementById('ipo-body'); tbody.innerHTML="";
-                this.data.forEach(i=>{
-                    const cap = parseInt((i["AmountofCapital "]||i.AmountofCapital||"0").replace(/,/g,''))/100000000;
-                    tbody.innerHTML+=`<tr><td class="stock-code">${i.Code||'-'}</td><td>${i.Company}<br><span style="font-size:11px;color:#aaa">${i.ListingDate?'已掛牌':'審核中'}</span></td><td>${i.ApplicationDate}</td><td>${cap.toFixed(2)}</td><td>${i.UnderwritingPrice}</td><td style="color:var(--accent)">${i.ListingDate||'-'}</td></tr>`;
+                const start = (this.page - 1) * this.size;
+                const end = start + this.size;
+                const list = this.data.slice(start, end);
+                const totalPages = Math.ceil(this.data.length / this.size);
+
+                list.forEach(i=>{
+                    const statusTag = i._isListed ? 
+                        `<span class="status-tag listed">已掛牌</span>` : 
+                        `<span class="status-tag">審核中</span>`;
+                    
+                    const capDisplay = (i._capitalNum / 100000000).toFixed(2); // 換算成億
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="stock-code">${i.Code||'-'}</td>
+                            <td><div style="font-weight:bold;color:#64b5f6">${i.Company}</div>${statusTag}</td>
+                            <td>${i.ApplicationDate}</td>
+                            <td>${i.Chairman||'-'}</td>
+                            <td style="color:var(--accent)">${capDisplay} 億</td>
+                            <td style="font-weight:bold">${i.UnderwritingPrice||'-'}</td>
+                            <td style="color:var(--success);font-weight:bold">${i.ListingDate||'-'}</td>
+                            <td style="font-size:11px;color:#aaa">${i.Underwriter||'-'}</td>
+                        </tr>`;
                 });
-            },
-            sort: function(key) { 
-                this.data.sort((a,b)=>(a[key]||"").localeCompare(b[key]||"") * -1); this.render(); 
+                
+                document.getElementById('ipo-page').innerText = `${this.page} / ${totalPages}`;
             }
         },
         // 6. 電子交易
@@ -899,15 +1033,46 @@
             init: async function(force) {
                 if(this.loaded && !force) return;
                 try {
+                    // Fetch shortage list
                     const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/t187ap10_L"));
-                    const raw = await res.json(); const d = raw[0];
-                    const tbody = document.getElementById('dir3m-body'); tbody.innerHTML="";
-                    const keys = [{k:"連續不足逾1年以上",l:"逾1年",c:"#ef4444"}, {k:"連續不足達6個月",l:"達6月",c:"#f97316"}, {k:"連續不足達3個月",l:"達3月",c:"#f97316"}];
-                    keys.forEach(k=>{
-                        if(d[k.k]) tbody.innerHTML+=`<tr><td><span style="border:1px solid ${k.c};color:${k.c};padding:2px 5px;border-radius:3px">${k.l}</span></td><td>${d[k.k]}</td></tr>`;
+                    const raw = await res.json(); 
+                    const d = raw[0];
+
+                    // Fetch Code-Name mapping (Stock list)
+                    let stockMap = {};
+                    try {
+                        const resNames = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL"));
+                        const dataNames = await resNames.json();
+                        dataNames.forEach(x => stockMap[x.Code] = x.Name);
+                    } catch(e) { console.warn("Failed to load stock names"); }
+
+                    const tbody = document.getElementById('dir3m-body'); 
+                    tbody.innerHTML="";
+                    const keys = [
+                        {k:"連續不足逾1年以上",l:"逾1年",c:"#ef4444"}, 
+                        {k:"連續不足達6個月",l:"達6月",c:"#f97316"}, 
+                        {k:"連續不足達3個月",l:"達3月",c:"#f97316"}
+                    ];
+                    
+                    keys.forEach(k => {
+                        let rawStr = d[k.k];
+                        if(rawStr) {
+                            // Extract codes (assuming codes are 4+ digits)
+                            // The raw string usually looks like "2330, 2454"
+                            let formatted = rawStr;
+                            const codes = rawStr.match(/\d{4,}/g);
+                            if(codes) {
+                                const items = codes.map(c => {
+                                    const name = stockMap[c] || "";
+                                    return `<span class="stock-code">${c}</span> <span style="color:#ccc">${name}</span>`;
+                                });
+                                formatted = items.join("、");
+                            }
+                            tbody.innerHTML+=`<tr><td style="white-space:nowrap"><span style="border:1px solid ${k.c};color:${k.c};padding:2px 5px;border-radius:3px;font-size:12px">${k.l}</span></td><td>${formatted}</td></tr>`;
+                        }
                     });
                     this.loaded=true;
-                } catch(e){}
+                } catch(e){ console.error(e); }
             }
         },
         // 14. 據點查詢

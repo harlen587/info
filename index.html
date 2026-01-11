@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台股全方位資訊</title>
+    <style>
+        :root {
+            --bg-dark: #1a1a1b;
+            --bg-panel: #2d2d2e;
+            --bg-hover: #3d3d3f;
+            --primary: #3b82f6;
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --success: #10b981;
+            --text-main: #e0e0e0;
+            --text-sub: #aaa;
+            --border: #444;
+        }
+        
+        * { box-sizing: border-box; }
+        body { 
+            font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; 
+            background-color: var(--bg-dark); 
+            color: var(--text-main); 
+            margin: 0; 
+            display: flex; 
+            height: 100vh; 
+            overflow: hidden;
+        }
+
+        /* --- 側邊導航欄 --- */
+        .sidebar {
+            width: 260px;
+            background-color: #202021;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .sidebar-header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            background: linear-gradient(45deg, #2563eb, #9333ea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            flex-shrink: 0;
+        }
+        .nav-scroll {
+            overflow-y: auto;
+            flex: 1;
+            padding-bottom: 20px;
+        }
+        .nav-scroll::-webkit-scrollbar { width: 6px; }
+        .nav-scroll::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        
+        .nav-group-title {
+            padding: 15px 20px 5px;
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+        .nav-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            color: #bbb;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+        }
+        .nav-item:hover {
+            background-color: var(--bg-hover);
+            color: #fff;
+        }
+        .nav-item.active {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-left-color: var(--primary);
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        /* --- 主要內容區 --- */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            position: relative;
+        }
+        .view-section {
+            display: none;
+            animation: fadeIn 0.3s ease;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        .view-section.active { display: block; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- 通用元件 --- */
+        .dashboard-panel {
+            background: var(--bg-panel);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            margin-bottom: 20px;
+            min-height: 400px;
+        }
+        h2 { text-align: center; margin-top: 0; margin-bottom: 20px; color: #fff; font-size: 24px; }
+        
+        .controls { 
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; 
+            background: var(--bg-hover); padding: 15px; border-radius: 10px; margin-bottom: 20px; gap: 10px;
+        }
+        
+        button { 
+            padding: 8px 16px; border-radius: 6px; border: 1px solid #555; background: #333; 
+            color: white; cursor: pointer; font-weight: bold; transition: 0.2s; 
+        }
+        button:hover { background: var(--primary); border-color: var(--primary); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        select, input {
+            padding: 8px 12px; border-radius: 5px; border: 1px solid #555; background: #252526; 
+            color: white; font-size: 14px;
+        }
+
+        .table-wrapper { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; max-height: 70vh; }
+        table { border-collapse: collapse; width: 100%; font-size: 14px; background: #252526; white-space: nowrap; }
+        th, td { border-bottom: 1px solid var(--border); padding: 12px 15px; text-align: left; vertical-align: middle; }
+        th { color: white; position: sticky; top: 0; z-index: 10; user-select: none; }
+        
+        /* 表頭顏色主題 */
+        .th-red { background-color: #d62828; }
+        .th-blue { background-color: #2563eb; }
+        .th-green { background-color: #059669; }
+        .th-orange { background-color: #f97316; }
+        .th-purple { background-color: #7c3aed; }
+        .th-pink { background-color: #db2777; }
+        .th-cyan { background-color: #0891b2; }
+        .th-gray { background-color: #4b5563; }
+
+        tr:nth-child(even) { background-color: #262627; }
+        tr:hover { background-color: var(--bg-hover); }
+
+        /* 特殊樣式 */
+        .stock-code { color: var(--accent); font-weight: bold; font-family: 'Consolas', monospace; text-align: center; }
+        .val-up { color: var(--danger); font-weight: bold; }
+        .val-down { color: var(--success); font-weight: bold; }
+        .status-msg { text-align: center; font-size: 13px; color: var(--accent); margin: 10px 0; min-height: 20px; }
+        .sort-icon { cursor: pointer; }
+        .sort-icon::after { content: ' ↕'; opacity: 0.3; font-size: 0.8em; margin-left: 5px; }
+        .sort-asc::after { content: ' ↑'; opacity: 1; color: var(--accent); }
+        .sort-desc::after { content: ' ↓'; opacity: 1; color: var(--accent); }
+        .pagination { display: flex; align-items: center; gap: 10px; }
+        .page-info { font-size: 14px; color: var(--primary); font-weight: bold; }
+
+        /* 重訊展開列 */
+        .detail-row { display: none; background-color: #202021; }
+        .detail-content { padding: 20px; color: #ccc; line-height: 1.6; white-space: pre-wrap; border-left: 3px solid var(--primary); margin: 10px; }
+
+        /* 性別比例條 */
+        .ratio-bar-container { width: 100px; background: #444; height: 8px; border-radius: 4px; overflow: hidden; display: flex; }
+        .male-part { background: #3b82f6; height: 100%; }
+        .female-part { background: #f472b6; height: 100%; }
+
+        /* 統計卡片 */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: #3d3d3f; padding: 15px; border-radius: 10px; text-align: center; border-left: 4px solid var(--primary); }
+        .stat-val { font-size: 20px; font-weight: bold; color: #fff; margin-top: 5px; }
+        .stat-label { font-size: 12px; color: #aaa; }
+
+        /* 彈窗 */
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+        .modal-content { background: var(--bg-panel); margin: 5% auto; padding: 25px; width: 80%; max-width: 800px; max-height: 80vh; overflow-y: auto; border-radius: 15px; border: 1px solid var(--border); }
+        .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .modal-item { border-bottom: 1px solid #444; padding: 8px 0; font-size: 14px; }
+        .modal-label { color: var(--primary); font-weight: bold; margin-right: 10px; }
+
+        /* 排名 */
+        .rank-badge { font-weight: 900; font-style: italic; color: #666; width: 30px; display: inline-block; text-align: center; }
+        .top-3 { color: var(--accent); font-size: 1.2em; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="sidebar-header">📊 台股全方位儀表板</div>
+    <div class="nav-scroll">
+        <div class="nav-group-title">市場概況</div>
+        <div class="nav-item active" onclick="switchView('view-attention')">🚨 注意股票</div>
+        <div class="nav-item" onclick="switchView('view-punish')">🚧 處置股票</div>
+        <div class="nav-item" onclick="switchView('view-top20')">🔥 成交量 TOP20</div>
+        <div class="nav-item" onclick="switchView('view-news')">📢 重大訊息</div>
+        <div class="nav-item" onclick="switchView('view-ipo')">🚀 新股上市進度</div>
+        <div class="nav-item" onclick="switchView('view-etrade')">💻 電子交易統計</div>
+        <div class="nav-item" onclick="switchView('view-holiday')">🗓️ 休市行事曆</div>
+        
+        <div class="nav-group-title">個股與基本面</div>
+        <div class="nav-item" onclick="switchView('view-revenue')">💰 營收監測</div>
+        <div class="nav-item" onclick="switchView('view-pepb')">📈 本益比/殖利率</div>
+        <div class="nav-item" onclick="switchView('view-ranking')">🏆 定期定額排行</div>
+        
+        <div class="nav-group-title">籌碼與股權</div>
+        <div class="nav-item" onclick="switchView('view-shareholders')">🏢 大股東持股</div>
+        <div class="nav-item" onclick="switchView('view-directors-all')">🛡️ 董監持股合規</div>
+        <div class="nav-item" onclick="switchView('view-directors-3m')">⚠️ 董監不足(3月)</div>
+        
+        <div class="nav-group-title">證券商專區</div>
+        <div class="nav-item" onclick="switchView('view-broker-branch')">📍 據點與電話查詢</div>
+        <div class="nav-item" onclick="switchView('view-broker-info')">📒 券商財務資料</div>
+        <div class="nav-item" onclick="switchView('view-broker-dca')">🏦 定期定額券商</div>
+        <div class="nav-item" onclick="switchView('view-personnel')">👥 從業職位統計</div>
+        <div class="nav-item" onclick="switchView('view-broker-gender')">🚻 營業員性別比</div>
+    </div>
+</div>
+
+<div class="main-content">
+
+    <!-- 1. 注意股票 -->
+    <div id="view-attention" class="view-section active">
+        <div class="dashboard-panel">
+            <h2>🚨 近 5 日注意股票</h2>
+            <div class="controls">
+                <button onclick="Modules.Attention.init(true)">🔄 更新</button>
+                <span id="att-range" style="color:#aaa; font-size:12px"></span>
+            </div>
+            <div id="att-status" class="status-msg"></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th class="th-red">日期</th><th class="th-red">代號</th><th class="th-red">名稱</th><th class="th-red">次數</th><th class="th-red">原因</th></tr></thead>
+                    <tbody id="att-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 處置股票 -->
+    <div id="view-punish" class="view-section">
+        <div class="dashboard-panel">
+            <h2>🚧 上市處置股票公告</h2>
+            <div class="controls">
+                <div class="pagination">
+                    <button onclick="Modules.Punish.changePage(-1)">上一頁</button>
+                    <span id="punish-page" class="page-info">1 / 1</span>
+                    <button onclick="Modules.Punish.changePage(1)">下一頁</button>
+                </div>
+                <button onclick="Modules.Punish.init(true)">🔄 刷新</button>
+            </div>
+            <div id="punish-status" class="status-msg"></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr>
+                        <th class="th-orange sort-icon" onclick="Modules.Punish.sort('Code')">代號</th>
+                        <th class="th-orange">名稱</th>
+                        <th class="th-orange sort-icon" onclick="Modules.Punish.sort('Date')">公告日</th>
+                        <th class="th-orange">處置期間</th>
+                        <th class="th-orange">處置措施</th>
+                    </tr></thead>
+                    <tbody id="punish-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Top 20 -->
+    <div id="view-top20" class="view-section">
+        <div class="dashboard-panel">
+            <h2>🔥 今日成交量 TOP 20</h2>
+            <div class="controls">
+                <button onclick="Modules.Top20.init(true)">🔄 刷新榜單</button>
+                <span id="top20-date" style="color:#aaa"></span>
+            </div>
+            <div id="top20-status" class="status-msg"></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th class="th-red">排名</th><th class="th-red">代號</th><th class="th-red">名稱</th><th class="th-red">成交量(張)</th><th class="th-red">收盤價</th><th class="th-red">漲跌</th></tr></thead>
+                    <tbody id="top20-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 重大訊息 -->
+    <div id="view-news" class="view-section">
+        <div class="dashboard-panel">
+            <h2>📢 上市公司重大訊息</h2>
+            <div class="controls">
+                <div class="pagination"><button onclick="Modules.News.changePage(-1)">◀</button><span id="news-page" class="page-info">1</span><button onclick="Modules.News.changePage(1)">▶</button></div>
+                <button onclick="Modules.News.init(true)">🔄 刷新</button>
+            </div>
+            <div id="news-status" class="status-msg"></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr><th class="th-blue">代號</th><th class="th-blue">名稱</th><th class="th-blue">日期</th><th class="th-blue">時間</th><th class="th-blue">主旨 (點擊展開)</th></tr></thead>
+                    <tbody id="news-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. 新股上市 -->
+    <div id="view-ipo" class="view-section">
+        <div class="dashboard-panel">
+            <h2>🚀 新股上市申請進度</h2>
+            <div class="controls"><button onclick="Modules.IPO.init(true)">🔄 刷新</button></div>
+            <div id="ipo-status" class="status-msg"></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead><tr>
+                        <th class="th-green sort-icon" onclick="Modules.IPO.sort('Code')">代號</th>
+                        <th class="th-green">公司名稱</th>
+                        <th class="th-green sort-icon" onclick="Modules.IPO.sort('ApplicationDate')">申請日期</th>
+                        <th class="th-green">資本額(億)</th>
+                        <th class="th-green">承銷價</th>
+                        <th class="th-green sort-icon" onclick="Modules.IPO.sort('ListingDate')">掛牌日期</th>
+                    </tr></thead>
+                    <tbody id="ipo-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. 電子交易 -->
+    <div id="view-etrade" class="view-section">
+        <div class="dashboard-panel">
+            <h2>💻 電子式交易統計趨勢</h2>
+            <div class="controls"><button onclick="Modules.ETrade.init(true)">🔄 刷新</button></div>
+            <div class="stats-grid" id="etrade-stats"></div>
+            <div class="table-wrapper" style="max-height:400px">
+                <table>
+                    <thead><tr><th class="th-blue">月份</th><th class="th-blue">新增戶數</th><th class="th-blue">累計開戶</th><th class="th-blue">交易人數</th><th class="th-blue">金額(億)</th><th class="th-blue">電子佔比(金額)</th></tr></thead>
+                    <tbody id="etrade-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. 休市行事曆 -->
+    <div id="view-holiday" class="view-section">
+        <div class="dashboard-panel" style="max-width:800px; margin:auto">
+            <h2>🗓️ 市場休市行事曆</h2>
+            <div class="controls"><button onclick="Modules.Holiday.init(true)">🔄 刷新</button></div>
+            <div class="table-wrapper" style="max-height:500px">
+                <table><thead><tr><th class="th-gray">日期</th><th class="th-gray">星期</th><th class="th-gray">名稱</th><th class="th-gray">說明</th></tr></thead><tbody id="holiday-body"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. 營收 -->
+    <div id="view-revenue" class="view-section">
+        <div class="dashboard-panel" style="max-width:600px; margin:auto; text-align:center">
+            <h2>💰 台股營收查詢</h2>
+            <div class="controls" style="justify-content:center">
+                <input type="text" id="rev-input" placeholder="輸入代號 (如 2330)" style="text-align:center">
+                <button onclick="Modules.Revenue.query()">🔍 查詢</button>
+            </div>
+            <div id="rev-result" style="display:none; text-align:left; margin-top:20px;">
+                <h3 id="rev-title" style="color:white; text-align:center"></h3>
+                <div class="stats-grid" style="grid-template-columns:1fr 1fr">
+                    <div class="stat-card"><div class="stat-label">本月營收</div><div id="rev-m" class="stat-val"></div><div id="rev-my" style="font-size:14px"></div></div>
+                    <div class="stat-card"><div class="stat-label">累計營收</div><div id="rev-c" class="stat-val"></div><div id="rev-cy" style="font-size:14px"></div></div>
+                </div>
+                <div style="background:#444; padding:10px; border-radius:8px; font-size:13px; color:#ccc">📝 <span id="rev-note"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9. 本益比 -->
+    <div id="view-pepb" class="view-section">
+        <div class="dashboard-panel">
+            <h2>📈 個股本益比 / 殖利率</h2>
+            <div class="controls">
+                <div class="pagination"><button onclick="Modules.PEPB.changePage(-1)">◀</button><span id="pepb-page" class="page-info"></span><button onclick="Modules.PEPB.changePage(1)">▶</button></div>
+                <input type="text" id="pepb-search" placeholder="搜尋代號..." oninput="Modules.PEPB.search()">
+            </div>
+            <div class="table-wrapper">
+                <table><thead><tr><th class="th-blue">代號</th><th class="th-blue">名稱</th><th class="th-blue">本益比</th><th class="th-blue">殖利率(%)</th><th class="th-blue">股價淨值比</th></tr></thead><tbody id="pepb-body"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 10. 定期定額 -->
+    <div id="view-ranking" class="view-section">
+        <div class="dashboard-panel">
+            <h2>🏆 定期定額排行</h2>
+            <div class="controls"><button onclick="Modules.Ranking.init(true)">🔄 刷新</button></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px">
+                <div class="table-wrapper"><table><thead><tr><th class="th-blue">名次</th><th class="th-blue">股票</th><th class="th-blue">戶數</th></tr></thead><tbody id="rank-stock"></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th class="th-green">名次</th><th class="th-green">ETF</th><th class="th-green">戶數</th></tr></thead><tbody id="rank-etf"></tbody></table></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 11. 大股東 -->
+    <div id="view-shareholders" class="view-section">
+        <div class="dashboard-panel">
+            <h2>🏢 大股東持股 (>10%)</h2>
+            <div class="controls">
+                <div class="pagination"><button onclick="Modules.Holder.changePage(-1)">◀</button><span id="holder-page" class="page-info"></span><button onclick="Modules.Holder.changePage(1)">▶</button></div>
+                <input type="text" oninput="Modules.Holder.search(this.value)" placeholder="搜尋代號...">
+            </div>
+            <div class="table-wrapper"><table><thead><tr><th class="th-purple">代號</th><th class="th-purple">名稱</th><th class="th-purple">大股東</th><th class="th-purple">日期</th></tr></thead><tbody id="holder-body"></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- 12. 董監合規 -->
+    <div id="view-directors-all" class="view-section">
+        <div class="dashboard-panel">
+            <h2>🛡️ 董監持股合規總表</h2>
+            <div class="controls">
+                <div class="pagination"><button onclick="Modules.DirAll.changePage(-1)">◀</button><span id="dirall-page" class="page-info"></span><button onclick="Modules.DirAll.changePage(1)">▶</button></div>
+                <button onclick="Modules.DirAll.init(true)">🔄</button>
+            </div>
+            <div class="table-wrapper"><table><thead><tr><th class="th-orange">代號</th><th class="th-orange">名稱</th><th class="th-orange">董事缺額</th><th class="th-orange">監察缺額</th></tr></thead><tbody id="dirall-body"></tbody></table></div>
+        </div>
+    </div>
+    
+    <!-- 13. 董監不足 -->
+    <div id="view-directors-3m" class="view-section">
+        <div class="dashboard-panel">
+            <h2>⚠️ 董監不足法定成數 (>3個月)</h2>
+            <div class="controls"><button onclick="Modules.Dir3m.init(true)">🔄 刷新</button></div>
+            <div class="table-wrapper"><table><thead><tr><th class="th-red">狀態</th><th class="th-red">公司名單</th></tr></thead><tbody id="dir3m-body"></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- 14. 據點查詢 -->
+    <div id="view-broker-branch" class="view-section">
+        <div class="dashboard-panel">
+            <h2>📍 證券商據點與電話查詢</h2>
+            <div class="controls">
+                <div class="pagination"><button onclick="Modules.BrBranch.changePage(-1)">◀</button><span id="brbr-page" class="page-info"></span><button onclick="Modules.BrBranch.changePage(1)">▶</button></div>
+                <input type="text" id="brbr-search" placeholder="搜尋券商、地區(如板橋)..." oninput="Modules.BrBranch.search()">
+            </div>
+            <div class="table-wrapper">
+                <table><thead><tr><th class="th-green">代號</th><th class="th-green">名稱</th><th class="th-green">電話</th><th class="th-green">地址</th></tr></thead><tbody id="brbr-body"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 15. 券商財務 -->
+    <div id="view-broker-info" class="view-section">
+        <div class="dashboard-panel">
+            <h2>📒 證券商基本財務資料</h2>
+            <div class="controls">
+                <div class="pagination"><button onclick="Modules.BrInfo.changePage(-1)">◀</button><span id="brinfo-page" class="page-info"></span><button onclick="Modules.BrInfo.changePage(1)">▶</button></div>
+                <input type="text" oninput="Modules.BrInfo.search(this.value)" placeholder="搜尋...">
+            </div>
+            <div class="table-wrapper">
+                <table><thead><tr><th class="th-blue">代號</th><th class="th-blue">簡稱</th><th class="th-blue">負責人</th><th class="th-blue">資本額(千)</th><th class="th-blue">詳情</th></tr></thead><tbody id="brinfo-body"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 16. 定期定額券商 -->
+    <div id="view-broker-dca" class="view-section">
+        <div class="dashboard-panel">
+            <h2>🏦 開辦定期定額業務券商</h2>
+            <div class="controls">
+                <input type="text" oninput="Modules.BrDCA.search(this.value)" placeholder="搜尋券商...">
+                <button onclick="Modules.BrDCA.init(true)">🔄 刷新</button>
+            </div>
+            <div class="table-wrapper">
+                <table><thead><tr><th class="th-cyan">代號</th><th class="th-cyan">券商名稱</th><th class="th-cyan">經紀開辦日</th><th class="th-cyan">財管開辦日</th></tr></thead><tbody id="brdca-body"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 17. 職位統計 -->
+    <div id="view-personnel" class="view-section">
+        <div class="dashboard-panel" style="max-width:800px; margin:auto">
+            <h2>👥 證券商從業人員職位統計</h2>
+            <div class="controls"><button onclick="Modules.Personnel.init(true)">🔄 刷新</button></div>
+            <div class="table-wrapper"><table><thead><tr><th class="th-purple">職位</th><th class="th-purple">人數</th><th class="th-purple">佔比</th></tr></thead><tbody id="personnel-body"></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- 18. 性別比例 -->
+    <div id="view-broker-gender" class="view-section">
+        <div class="dashboard-panel">
+            <h2>🚻 營業員性別比例統計</h2>
+            <div class="controls">
+                <div class="pagination"><button onclick="Modules.BrGender.changePage(-1)">◀</button><span id="gender-page" class="page-info"></span><button onclick="Modules.BrGender.changePage(1)">▶</button></div>
+                <input type="text" oninput="Modules.BrGender.search(this.value)" placeholder="搜尋代號...">
+            </div>
+            <div class="table-wrapper">
+                <table><thead><tr><th class="th-pink">代號</th><th class="th-pink">男性</th><th class="th-pink">女性</th><th class="th-pink">比例圖 (男/女)</th></tr></thead><tbody id="gender-body"></tbody></table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- 詳情彈窗 -->
+<div id="detailModal" class="modal">
+    <div class="modal-content">
+        <h3 id="modalTitle" style="color:var(--primary); border-bottom:1px solid #555; padding-bottom:10px"></h3>
+        <div id="modalBody" class="modal-grid"></div>
+        <div style="text-align:right; margin-top:20px"><button onclick="document.getElementById('detailModal').style.display='none'" style="background:var(--danger)">關閉</button></div>
+    </div>
+</div>
+
+<script>
+    const Utils = {
+        cors: (u) => "https://corsproxy.io/?" + encodeURIComponent(u),
+        fmtNum: (n) => n ? parseInt(n).toLocaleString() : '0',
+        cleanNum: (v) => parseFloat((v||"0").toString().replace(/,/g,'')) || 0,
+        fmtDate: (d) => { const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${y}${m}${dd}`; }
+    };
+
+    function switchView(id) {
+        document.querySelectorAll('.view-section').forEach(e => e.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        event.currentTarget.classList.add('active');
+        
+        const mod = {
+            'view-attention': Modules.Attention, 'view-punish': Modules.Punish, 'view-top20': Modules.Top20,
+            'view-news': Modules.News, 'view-ipo': Modules.IPO, 'view-etrade': Modules.ETrade,
+            'view-holiday': Modules.Holiday, 'view-pepb': Modules.PEPB, 'view-ranking': Modules.Ranking,
+            'view-shareholders': Modules.Holder, 'view-directors-all': Modules.DirAll, 'view-directors-3m': Modules.Dir3m,
+            'view-broker-branch': Modules.BrBranch, 'view-broker-info': Modules.BrInfo, 'view-broker-dca': Modules.BrDCA,
+            'view-personnel': Modules.Personnel, 'view-broker-gender': Modules.BrGender
+        }[id];
+        if(mod && !mod.loaded) mod.init();
+    }
+
+    const Modules = {
+        // 1. 注意股票
+        Attention: {
+            loaded: false,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                const tbody = document.getElementById('att-body');
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">⏳ 載入中...</td></tr>';
+                const today = new Date(); const start = new Date(); start.setDate(today.getDate()-7);
+                try {
+                    const res = await fetch(Utils.cors(`https://www.twse.com.tw/rwd/zh/announcement/notice?startDate=${Utils.fmtDate(start)}&endDate=${Utils.fmtDate(today)}&response=json`));
+                    const json = await res.json();
+                    if(json.stat!=="OK") throw new Error();
+                    tbody.innerHTML="";
+                    const map={d:0, c:1, n:2, cnt:3, r:4}; // 預設 Mapping
+                    if(json.fields) {
+                        map.d = json.fields.findIndex(f=>f.includes("日期"));
+                        map.c = json.fields.findIndex(f=>f.includes("代號"));
+                        map.n = json.fields.findIndex(f=>f.includes("名稱"));
+                        map.cnt = json.fields.findIndex(f=>f.includes("次數"));
+                        map.r = json.fields.findIndex(f=>f.includes("資訊"));
+                    }
+                    [...json.data].reverse().forEach(row=>{
+                        const reason = document.createElement('div'); reason.innerHTML = row[map.r];
+                        tbody.innerHTML += `<tr><td>${row[map.d]}</td><td class="stock-code">${row[map.c]}</td><td>${row[map.n]}</td><td style="color:var(--accent)">${row[map.cnt]}</td><td style="font-size:12px;color:#aaa">${reason.textContent}</td></tr>`;
+                    });
+                    document.getElementById('att-range').innerText = `範圍: ${Utils.fmtDate(start)} ~ ${Utils.fmtDate(today)}`;
+                    this.loaded=true;
+                } catch(e){ tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">查無資料</td></tr>'; }
+            }
+        },
+        // 2. 處置股票
+        Punish: {
+            loaded: false, data: [], page: 1, size: 20,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/announcement/punish"));
+                    this.data = await res.json();
+                    this.loaded=true; this.sort('Date');
+                } catch(e){}
+            },
+            render: function() {
+                const tbody = document.getElementById('punish-body'); tbody.innerHTML="";
+                const start=(this.page-1)*this.size;
+                this.data.slice(start, start+this.size).forEach(i=>{
+                   tbody.innerHTML+=`<tr><td class="stock-code">${i.Code}</td><td>${i.Name}</td><td>${i.Date}</td><td style="font-size:12px">${i.DispositionPeriod}</td><td style="font-size:12px;color:#fca5a5">${i.DispositionMeasures}</td></tr>`;
+                });
+                document.getElementById('punish-page').innerText = `${this.page}/${Math.ceil(this.data.length/this.size)}`;
+            },
+            changePage: function(d) { if(this.page+d>0 && this.page+d<=Math.ceil(this.data.length/this.size)) { this.page+=d; this.render(); } },
+            sort: function(key) { 
+                this.data.sort((a,b)=>(a[key]||"").localeCompare(b[key]||"") * -1); // Default Desc
+                this.page=1; this.render();
+            }
+        },
+        // 3. Top 20
+        Top20: {
+            loaded: false,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20"));
+                    const data = await res.json();
+                    const tbody = document.getElementById('top20-body'); tbody.innerHTML="";
+                    data.forEach((i, idx)=>{
+                        const vol = Math.floor(parseInt(i.TradeVolume.replace(/,/g,''))/1000);
+                        const cls = i.Dir.includes('+')||i.Dir.includes('▲') ? 'val-up' : (i.Dir.includes('-')||i.Dir.includes('▼') ? 'val-down' : '');
+                        tbody.innerHTML+=`<tr><td><span class="rank-badge ${idx<3?'top-3':''}">${i.Rank||idx+1}</span></td><td class="stock-code">${i.Code}</td><td>${i.Name}</td><td style="color:var(--accent)">${vol.toLocaleString()}</td><td>${i.ClosingPrice}</td><td class="${cls}">${i.Dir}${i.Change}</td></tr>`;
+                    });
+                    document.getElementById('top20-date').innerText = `資料日期: ${data[0].Date}`;
+                    this.loaded=true;
+                } catch(e){}
+            }
+        },
+        // 4. 重大訊息
+        News: {
+            loaded: false, data: [], page: 1, size: 20,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/t187ap04_L"));
+                    this.data = await res.json();
+                    this.loaded=true; this.render();
+                } catch(e){}
+            },
+            render: function() {
+                const tbody = document.getElementById('news-body'); tbody.innerHTML="";
+                const list = this.data.slice((this.page-1)*this.size, this.page*this.size);
+                list.forEach((i, idx)=>{
+                    const uid = `news-${idx}`;
+                    tbody.innerHTML += `<tr><td class="stock-code">${i.公司代號}</td><td>${i.公司名稱}</td><td>${i.發言日期}</td><td>${i.發言時間}</td><td style="color:var(--primary);cursor:pointer" onclick="document.getElementById('${uid}').style.display=document.getElementById('${uid}').style.display==='block'?'none':'block'">${i.主旨}</td></tr>
+                    <tr><td colspan="5" style="padding:0;border:none"><div id="${uid}" class="detail-row"><div class="detail-content">${i.說明}</div></div></td></tr>`;
+                });
+                document.getElementById('news-page').innerText = this.page;
+            },
+            changePage: function(d) { if(this.page+d>0) { this.page+=d; this.render(); } }
+        },
+        // 5. 新股上市
+        IPO: {
+            loaded: false, data: [],
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/company/newlisting"));
+                    this.data = await res.json();
+                    this.loaded=true; this.sort('ApplicationDate');
+                } catch(e){}
+            },
+            render: function() {
+                const tbody = document.getElementById('ipo-body'); tbody.innerHTML="";
+                this.data.forEach(i=>{
+                    const cap = parseInt((i["AmountofCapital "]||i.AmountofCapital||"0").replace(/,/g,''))/100000000;
+                    tbody.innerHTML+=`<tr><td class="stock-code">${i.Code||'-'}</td><td>${i.Company}<br><span style="font-size:11px;color:#aaa">${i.ListingDate?'已掛牌':'審核中'}</span></td><td>${i.ApplicationDate}</td><td>${cap.toFixed(2)}</td><td>${i.UnderwritingPrice}</td><td style="color:var(--accent)">${i.ListingDate||'-'}</td></tr>`;
+                });
+            },
+            sort: function(key) { 
+                this.data.sort((a,b)=>(a[key]||"").localeCompare(b[key]||"") * -1); this.render(); 
+            }
+        },
+        // 6. 電子交易
+        ETrade: {
+            loaded: false,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/t187ap19"));
+                    const data = await res.json(); data.reverse();
+                    const last = data[0];
+                    document.getElementById('etrade-stats').innerHTML = `
+                        <div class="stat-card"><div class="stat-label">最新月份</div><div class="stat-val">${last.成交月份}</div></div>
+                        <div class="stat-card"><div class="stat-label">本月新增戶</div><div class="stat-val" style="color:var(--accent)">${last.本月新增戶數}</div></div>
+                        <div class="stat-card"><div class="stat-label">電子交易佔比(金額)</div><div class="stat-val">${last["占市場成交比率(金額)"]}%</div></div>
+                        <div class="stat-card"><div class="stat-label">平均每筆金額</div><div class="stat-val">${last.平均每筆成交金額}</div></div>
+                    `;
+                    const tbody = document.getElementById('etrade-body'); tbody.innerHTML="";
+                    data.forEach(i=>{
+                         const amt = (parseFloat(i.成交金額.replace(/,/g,''))/100000000).toFixed(1);
+                         tbody.innerHTML+=`<tr><td>${i.成交月份}</td><td>${i.本月新增戶數}</td><td>${i.累計開戶數}</td><td>${i.本月交易人數}</td><td style="color:var(--accent)">${amt}</td><td>${i["占市場成交比率(金額)"]}%</td></tr>`;
+                    });
+                    this.loaded=true;
+                } catch(e){}
+            }
+        },
+        // 7. 休市
+        Holiday: {
+            loaded: false,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/holidaySchedule/holidaySchedule"));
+                    const data = await res.json();
+                    const tbody = document.getElementById('holiday-body'); tbody.innerHTML="";
+                    const now = new Date().toISOString().slice(0,10).replace(/-/g,'');
+                    data.forEach(i=>{
+                        const isPast = i.Date.replace(/\//g,'') < now;
+                        tbody.innerHTML+=`<tr style="${isPast?'opacity:0.5':''}"><td style="color:${isPast?'#aaa':'var(--primary)'}">${i.Date}</td><td>${i.Weekday}</td><td>${i.Name}</td><td>${i.Description}</td></tr>`;
+                    });
+                    this.loaded=true;
+                } catch(e){}
+            }
+        },
+        // 8. 營收
+        Revenue: {
+            query: async function() {
+                const id = document.getElementById('rev-input').value; if(!id) return;
+                try {
+                    const res = await fetch(Utils.cors(`https://mops.twse.com.tw/mops/api/t05st10_ifrs?t=${Date.now()}`), {
+                        method:'POST', body:JSON.stringify({companyId:id, dataType:'1'})
+                    });
+                    const json = await res.json();
+                    if(json.code!==200 || !json.result.data) throw new Error();
+                    const d = json.result.data;
+                    document.getElementById('rev-result').style.display='block';
+                    document.getElementById('rev-title').innerText = `${json.result.companyAbbreviation} (${id}) - ${json.result.yymm}`;
+                    document.getElementById('rev-m').innerText = `${d[0][1]}千`;
+                    document.getElementById('rev-my').innerText = `YoY ${d[3][1]}%`;
+                    document.getElementById('rev-c').innerText = `${d[4][1]}千`;
+                    document.getElementById('rev-cy').innerText = `YoY ${d[7][1]}%`;
+                    document.getElementById('rev-note').innerText = (d[8]&&d[8][1]) ? d[8][1] : '無說明';
+                } catch(e){ alert('查無資料'); }
+            }
+        },
+        // 9. 本益比
+        PEPB: {
+            loaded: false, data: [], filtered: [], page: 1, size: 50,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL"));
+                    this.data = await res.json();
+                    this.filtered = this.data;
+                    this.loaded=true; this.render();
+                } catch(e){}
+            },
+            search: function() {
+                const term = document.getElementById('pepb-search').value.toUpperCase();
+                this.filtered = this.data.filter(i=>i.Code.includes(term)||i.Name.includes(term));
+                this.page=1; this.render();
+            },
+            render: function() {
+                const tbody = document.getElementById('pepb-body'); tbody.innerHTML="";
+                const start=(this.page-1)*this.size;
+                this.filtered.slice(start, start+this.size).forEach(i=>{
+                    tbody.innerHTML+=`<tr><td class="stock-code">${i.Code}</td><td>${i.Name}</td><td>${i.PEratio}</td><td style="color:#66bb6a">${i.DividendYield}</td><td>${i.PBratio}</td></tr>`;
+                });
+                document.getElementById('pepb-page').innerText = `${this.page}/${Math.ceil(this.filtered.length/this.size)||1}`;
+            },
+            changePage: function(d) { if(this.page+d>0 && this.page+d<=Math.ceil(this.filtered.length/this.size)) { this.page+=d; this.render(); } }
+        },
+        // 10. 定期定額
+        Ranking: {
+            loaded: false,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/ETFReport/ETFRank"));
+                    const data = await res.json();
+                    const sB = document.getElementById('rank-stock'); const eB = document.getElementById('rank-etf');
+                    sB.innerHTML=""; eB.innerHTML="";
+                    data.forEach(i=>{
+                        const hl = i.No<=3 ? 'color:var(--accent);font-weight:bold' : '';
+                        if(i.STOCKsSecurityCode) sB.innerHTML+=`<tr><td style="${hl}">${i.No}</td><td class="stock-code">${i.STOCKsSecurityCode} ${i.STOCKsName}</td><td>${Utils.fmtNum(i.STOCKsNumberofTradingAccounts)}</td></tr>`;
+                        if(i.ETFsSecurityCode) eB.innerHTML+=`<tr><td style="${hl}">${i.No}</td><td class="stock-code">${i.ETFsSecurityCode} ${i.ETFsName}</td><td>${Utils.fmtNum(i.ETFsNumberofTradingAccounts)}</td></tr>`;
+                    });
+                    this.loaded=true;
+                } catch(e){}
+            }
+        },
+        // 11. 大股東
+        Holder: {
+            loaded: false, data: [], filtered: [], page: 1, size: 50,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/t187ap02_L"));
+                    this.data = await res.json(); this.filtered=this.data;
+                    this.loaded=true; this.render();
+                } catch(e){}
+            },
+            search: function(v) { this.filtered=this.data.filter(i=>i["公司代號"].includes(v)); this.page=1; this.render(); },
+            render: function() {
+                const tbody = document.getElementById('holder-body'); tbody.innerHTML="";
+                this.filtered.slice((this.page-1)*this.size, this.page*this.size).forEach(i=>{
+                    tbody.innerHTML+=`<tr><td class="stock-code">${i["公司代號"]}</td><td>${i["公司名稱"]}</td><td style="color:var(--primary)">${i["大股東名稱"]}</td><td>${i["出表日期"]}</td></tr>`;
+                });
+                document.getElementById('holder-page').innerText = this.page;
+            },
+            changePage: function(d) { if(this.page+d>0) { this.page+=d; this.render(); } }
+        },
+        // 12. 董監合規
+        DirAll: {
+            loaded: false, data: [], page: 1, size: 50,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/t187ap08_L"));
+                    this.data = await res.json();
+                    this.data.sort((a,b)=>Utils.cleanNum(b["全體董事不足股數"])-Utils.cleanNum(a["全體董事不足股數"]));
+                    this.loaded=true; this.render();
+                } catch(e){}
+            },
+            render: function() {
+                const tbody = document.getElementById('dirall-body'); tbody.innerHTML="";
+                this.data.slice((this.page-1)*this.size, this.page*this.size).forEach(i=>{
+                    const d = Utils.cleanNum(i["全體董事不足股數"]);
+                    const s = Utils.cleanNum(i["全體監察人不足股數"]);
+                    tbody.innerHTML+=`<tr><td class="stock-code">${i["公司代號"]}</td><td>${i["公司名稱"]}</td><td style="color:${d>0?'var(--danger)':'#aaa'}">${d>0?Utils.fmtNum(d):'OK'}</td><td style="color:${s>0?'var(--danger)':'#aaa'}">${s>0?Utils.fmtNum(s):'OK'}</td></tr>`;
+                });
+                document.getElementById('dirall-page').innerText = this.page;
+            },
+            changePage: function(d) { if(this.page+d>0) { this.page+=d; this.render(); } }
+        },
+        // 13. 董監不足3M
+        Dir3m: {
+            loaded: false,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/t187ap10_L"));
+                    const raw = await res.json(); const d = raw[0];
+                    const tbody = document.getElementById('dir3m-body'); tbody.innerHTML="";
+                    const keys = [{k:"連續不足逾1年以上",l:"逾1年",c:"#ef4444"}, {k:"連續不足達6個月",l:"達6月",c:"#f97316"}, {k:"連續不足達3個月",l:"達3月",c:"#f97316"}];
+                    keys.forEach(k=>{
+                        if(d[k.k]) tbody.innerHTML+=`<tr><td><span style="border:1px solid ${k.c};color:${k.c};padding:2px 5px;border-radius:3px">${k.l}</span></td><td>${d[k.k]}</td></tr>`;
+                    });
+                    this.loaded=true;
+                } catch(e){}
+            }
+        },
+        // 14. 據點查詢
+        BrBranch: {
+            loaded: false, data: [], filtered: [], page: 1, size: 20,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/OpenData_BRK02"));
+                    this.data = await res.json();
+                    this.filtered = this.data.filter(i=>i["證券商代號"]!=="string");
+                    this.loaded=true; this.render();
+                } catch(e){}
+            },
+            search: function() {
+                const v = document.getElementById('brbr-search').value.toLowerCase();
+                this.filtered = this.data.filter(i=>i["證券商名稱"].includes(v)||i["地址"].includes(v));
+                this.page=1; this.render();
+            },
+            render: function() {
+                const tbody = document.getElementById('brbr-body'); tbody.innerHTML="";
+                this.filtered.slice((this.page-1)*this.size, this.page*this.size).forEach(i=>{
+                    tbody.innerHTML+=`<tr><td class="stock-code">${i["證券商代號"]}</td><td>${i["證券商名稱"]}</td><td>${i["電話"]}</td><td style="font-size:12px;color:#aaa">${i["地址"]}</td></tr>`;
+                });
+                document.getElementById('brbr-page').innerText = `${this.page}/${Math.ceil(this.filtered.length/this.size)}`;
+            },
+            changePage: function(d) { if(this.page+d>0 && this.page+d<=Math.ceil(this.filtered.length/this.size)) { this.page+=d; this.render(); } }
+        },
+        // 15. 券商財務
+        BrInfo: {
+            loaded: false, data: [], filtered: [], page: 1, size: 20,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/t187ap18"));
+                    this.data = await res.json();
+                    this.filtered = this.data.filter(i=>i["證券代號"]!=="string");
+                    this.loaded=true; this.render();
+                } catch(e){}
+            },
+            search: function(v) {
+                this.filtered = this.data.filter(i=>i["券商(證券IB)簡稱"].includes(v)||i["證券代號"].includes(v));
+                this.page=1; this.render();
+            },
+            render: function() {
+                const tbody = document.getElementById('brinfo-body'); tbody.innerHTML="";
+                this.filtered.slice((this.page-1)*this.size, this.page*this.size).forEach((i, idx)=>{
+                    const cap = parseInt(i["實收資本額（仟元）"]||0).toLocaleString();
+                    tbody.innerHTML+=`<tr><td class="stock-code">${i["證券代號"]}</td><td>${i["券商(證券IB)簡稱"]}</td><td>${i["負責人"]}</td><td style="text-align:right;color:#a7f3d0">${cap}</td><td><button style="padding:2px 8px;font-size:12px" onclick="Modules.BrInfo.showDetail('${i["證券代號"]}')">詳細</button></td></tr>`;
+                });
+                document.getElementById('brinfo-page').innerText = this.page;
+            },
+            showDetail: function(code) {
+                const item = this.data.find(i=>i["證券代號"]===code);
+                const body = document.getElementById('modalBody'); body.innerHTML="";
+                document.getElementById('modalTitle').innerText = item["券商(證券IB)簡稱"];
+                Object.keys(item).forEach(k=>{
+                    if(item[k] && item[k]!=="string") body.innerHTML+=`<div class="modal-item"><span class="modal-label">${k}:</span> ${item[k]}</div>`;
+                });
+                document.getElementById('detailModal').style.display = 'block';
+            },
+            changePage: function(d) { if(this.page+d>0) { this.page+=d; this.render(); } }
+        },
+        // 16. 定期定額券商
+        BrDCA: {
+            loaded: false, data: [], filtered: [],
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/brokerService/secRegData"));
+                    this.data = await res.json(); this.filtered=this.data;
+                    this.loaded=true; this.render();
+                } catch(e){}
+            },
+            search: function(v) { this.filtered=this.data.filter(i=>i.Name.includes(v)); this.render(); },
+            render: function() {
+                const tbody = document.getElementById('brdca-body'); tbody.innerHTML="";
+                this.filtered.forEach(i=>{
+                    tbody.innerHTML+=`<tr><td class="stock-code">${i.SecuritiesFirmCode}</td><td>${i.Name}</td><td>${i.BrokerageBusinessStartingDate||'-'}</td><td>${i.WealthManagementBusinessStartingDate||'-'}</td></tr>`;
+                });
+            }
+        },
+        // 17. 職位
+        Personnel: {
+            loaded: false,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/t187ap01"));
+                    const data = await res.json(); const rec=data[0];
+                    const tbody = document.getElementById('personnel-body'); tbody.innerHTML="";
+                    const skips=["出表日期","合計"];
+                    Object.keys(rec).filter(k=>!skips.includes(k)&&!isNaN(parseInt(rec[k]))).map(k=>({n:k,c:parseInt(rec[k])})).sort((a,b)=>b.c-a.c).forEach(i=>{
+                        tbody.innerHTML+=`<tr><td>${i.n}</td><td style="color:var(--accent)">${i.c.toLocaleString()}</td><td>${((i.c/parseInt(rec["合計"]))*100).toFixed(1)}%</td></tr>`;
+                    });
+                    this.loaded=true;
+                } catch(e){}
+            }
+        },
+        // 18. 性別比
+        BrGender: {
+            loaded: false, data: [], filtered: [], page: 1, size: 20,
+            init: async function(force) {
+                if(this.loaded && !force) return;
+                try {
+                    const res = await fetch(Utils.cors("https://openapi.twse.com.tw/v1/opendata/OpenData_BRK01"));
+                    const json = await res.json();
+                    this.data = json.filter(i=>!isNaN(parseInt(i["總人數"])) && parseInt(i["總人數"])>0);
+                    this.filtered = this.data; this.loaded=true; this.render();
+                } catch(e){}
+            },
+            search: function(v) { this.filtered=this.data.filter(i=>i["證券商代號"].includes(v)); this.page=1; this.render(); },
+            render: function() {
+                const tbody = document.getElementById('gender-body'); tbody.innerHTML="";
+                this.filtered.slice((this.page-1)*this.size, this.page*this.size).forEach(i=>{
+                    const m = parseInt(i["男性員工人數"]); const f = parseInt(i["女性員工人數"]); const t = parseInt(i["總人數"]);
+                    const mp = ((m/t)*100).toFixed(1); const fp = ((f/t)*100).toFixed(1);
+                    tbody.innerHTML+=`<tr><td class="stock-code">${i["證券商代號"]}</td><td>${m}</td><td>${f}</td><td><div class="ratio-bar-container"><div class="male-part" style="width:${mp}%"></div><div class="female-part" style="width:${fp}%"></div></div><div style="font-size:10px;display:flex;justify-content:space-between"><span style="color:#3b82f6">${mp}%</span><span style="color:#f472b6">${fp}%</span></div></td></tr>`;
+                });
+                document.getElementById('gender-page').innerText = this.page;
+            },
+            changePage: function(d) { if(this.page+d>0) { this.page+=d; this.render(); } }
+        }
+    };
+
+    window.onload = function() { Modules.Attention.init(); };
+</script>
+</body>
+</html>
